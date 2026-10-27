@@ -1,31 +1,165 @@
-name: CI - Validation Socle & Structure
+name: CI - Pipeline Globale (Backend & Frontend)
 
 on:
   push:
     branches:
       - main
-      - develop
   pull_request:
     branches:
       - main
-      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate-project:
-    name: Structure & Integrity Validation
+  # ============================================================================
+  # JOB 1 : BACKEND CI (Spring Boot 3 + Java 21)
+  # ============================================================================
+  backend-ci:
+    name: Backend CI (Spring Boot & Tests)
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify Key Project Structure
+      - name: Set up JDK 21 (Eclipse Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Make Maven wrapper executable
+        run: chmod +x mvnw
+
+      - name: Compile and execute automated tests
+        run: ./mvnw -B clean verify
+
+      - name: Upload Surefire test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 14
+
+      - name: Upload packaged JAR artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+          retention-days: 7
+
+  # ============================================================================
+  # JOB 2 : FRONTEND CI (React + TypeScript)
+  # ============================================================================
+  frontend-ci:
+    name: Frontend CI (React & TypeScript)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Frontend Readiness
+        id: check-frontend
         run: |
-          echo "Verifying mandatory project directories..."
-          test -d frontend || (echo "Directory frontend missing!" && exit 1)
-          test -d backend || (echo "Directory backend missing!" && exit 1)
-          test -f .env.example || (echo "File .env.example missing!" && exit 1)
-          test -f README.md || (echo "File README.md missing!" && exit 1)
-          echo "Mandatory structure is intact."
+          if [ -f package.json ]; then
+            echo "frontend_initialized=true" >> "$GITHUB_OUTPUT"
+            echo "package.json found. Proceeding with frontend CI tasks."
+          else
+            echo "frontend_initialized=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Frontend en attente::Le dossier frontend/ ne contient pas encore de package.json (projet en cours d'initialisation par l'équipe frontend)."
+          fi
+
+      - name: Set up Node.js LTS (20.x)
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: TypeScript type checking
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        run: |
+          if npx --no-install tsc --version >/dev/null 2>&1; then
+            npx tsc --noEmit
+          elif npm run | grep -q "typecheck"; then
+            npm run typecheck
+          else
+            echo "Aucun script de vérification de type configuré, passage."
+          fi
+
+      - name: Linting (ESLint)
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        run: |
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "Aucun script de lint configuré, passage."
+          fi
+
+      - name: Execute frontend tests
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        run: |
+          if npm run | grep -q "test"; then
+            npm test -- --watchAll=false
+          else
+            echo "Aucun script de test configuré, passage."
+          fi
+
+      - name: Build production bundle
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        run: npm run build
+
+      - name: Upload production build artifact
+        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: |
+            frontend/dist/
+            frontend/build/
+          retention-days: 7
+
+  # ============================================================================
+  # JOB 3 : CI SUMMARY GATE (Validation Globale pour Branch Protection Rule)
+  # ============================================================================
+  ci-status-check:
+    name: Global CI Gate (Backend & Frontend)
+    needs: [backend-ci, frontend-ci]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify Overall CI Success
+        run: |
+          if [ "${{ needs.backend-ci.result }}" != "success" ]; then
+            echo "::error::Le job Backend CI a échoué !"
+            exit 1
+          fi
+          if [ "${{ needs.frontend-ci.result }}" != "success" ]; then
+            echo "::error::Le job Frontend CI a échoué !"
+            exit 1
+          fi
+          echo "Tous les jobs CI requis ont été validés avec succès."

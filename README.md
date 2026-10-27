@@ -1,6 +1,4 @@
-# Plateforme de Gestion des Projets PFE (PFE Management Platform)
-
-[![CI - Validation](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/ci.yml)
+[![CI - Pipeline Globale](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/ci.yml)
 [![DevSecOps - Security](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/security.yml/badge.svg)](https://github.com/elansari111/PFE-Management-Platform/actions/workflows/security.yml)
 
 Plateforme collaborative et sécurisée dédiée à la gestion complète des Projets de Fin d'Études (PFE) : soumission des sujets, affectation, suivi des livrables et soutenances.
@@ -13,6 +11,60 @@ Projet académique réalisé par une équipe de 4 développeurs :
 - **Safia** (Branche : `dev-safia`)
 - **Salma** (Branche : `dev-salma`)
 - **Mohamed (Simo)** (Branche : `dev-simo`)
+
+---
+
+## ⚙️ Intégration Continue Globale (CI/CD)
+
+Le projet dispose d'une pipeline d'intégration continue unifiée sous GitHub Actions :
+- **Fichier de workflow** : `.github/workflows/ci.yml`
+- **Rôle de la CI** : Valider automatiquement et en parallèle la conformité du **Backend (Spring Boot)** et du **Frontend (React)** sur chaque proposition de code.
+- **Événements déclencheurs** :
+  - `push` sur la branche `main`.
+  - `pull_request` vers `main`.
+  - `workflow_dispatch` (déclenchement manuel via GitHub).
+
+### Architecture des Jobs parallèles :
+
+```mermaid
+flowchart TD
+    Trigger([Push / PR vers main]) --> BackendJob[Job 1 : Backend CI]
+    Trigger --> FrontendJob[Job 2 : Frontend CI]
+    BackendJob -->|Compilation & JUnit 5 Tests| Gate[Job 3 : Global CI Gate]
+    FrontendJob -->|TypeCheck, Lint, Build| Gate
+    Gate --> Status{Validation Globale}
+```
+
+1. **Job 1 : Backend CI (`backend-ci`)**
+   - Environnement : `ubuntu-latest`, JDK 21 (Temurin) avec cache Maven.
+   - Exécution : `./mvnw -B clean verify`.
+   - Tests JUnit 5 avec base isolée H2 (aucun conteneur MySQL externe nécessaire pendant les tests unitaires).
+   - Publication des rapports Surefire (`backend-surefire-reports`) et de l'archive JAR (`backend-jar`).
+
+2. **Job 2 : Frontend CI (`frontend-ci`)**
+   - Environnement : `ubuntu-latest`, Node.js LTS (20.x) avec cache `npm`.
+   - Détection automatique de l'état d'avancement du dossier `frontend/` (compatible avec les branches des membres pendant l'initialisation React).
+   - Dès initialisation : installation dépendances (`npm ci`), vérification des types TypeScript (`tsc --noEmit`), linter ESLint, exécution des tests et build de production.
+   - Publication des livrables de production (`frontend-build`).
+
+3. **Job 3 : Global CI Gate (`ci-status-check`)**
+   - Sert de verrou global unique pour les **règles de protection de branche GitHub** (`Branch protection rules` sur `main`).
+   - Bloque la fusion si le backend ou le frontend présente une anomalie.
+
+---
+
+### Exécution locale des vérifications :
+
+```powershell
+# Vérification Backend :
+cd backend
+.\mvnw.cmd -B clean verify
+
+# Vérification Frontend (dès package.json présent) :
+cd frontend
+npm test
+npm run build
+```
 
 ---
 

@@ -1,0 +1,3 @@
+# Dossier backend
+Ce dossier accueillera l'API serveur et la logique métier de la plateforme PFE.
+Stack technique à valider par l'équipe (ex: Node.js / Express / NestJS / FastAPI / Spring Boot).

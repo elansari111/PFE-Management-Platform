@@ -1,0 +1,31 @@
+name: CI - Validation Socle & Structure
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  validate-project:
+    name: Structure & Integrity Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify Key Project Structure
+        run: |
+          echo "Verifying mandatory project directories..."
+          test -d frontend || (echo "Directory frontend missing!" && exit 1)
+          test -d backend || (echo "Directory backend missing!" && exit 1)
+          test -f .env.example || (echo "File .env.example missing!" && exit 1)
+          test -f README.md || (echo "File README.md missing!" && exit 1)
+          echo "Mandatory structure is intact."

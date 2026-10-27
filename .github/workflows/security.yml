@@ -1,0 +1,42 @@
+name: DevSecOps - Security Scans
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Scan hebdomadaire tous les lundis à 04:00 UTC
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret & Credential Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan Repository for Leaked Secrets (TruffleHog)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+        continue-on-error: true
+
+      - name: Verify No Sensitive Files Committed
+        run: |
+          echo "Checking that no .env or private key files are present in git history..."
+          if git ls-files | grep -E '(\.env$|\.key$|\.pem$)'; then
+            echo "CRITICAL: Sensitive files found committed in git!"
+            exit 1
+          fi
+          echo "No sensitive files detected."

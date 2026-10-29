@@ -217,7 +217,7 @@ export function DashboardPage() {
                 : 'Données issues de l’API Spring Boot (/api/v1/projects)'}
             </span>
           </div>
-          <span className="font-mono text-xs text-blue-300">Branche : dev-simo</span>
+          <span className="font-mono text-xs text-blue-300">Environnement : Sprint 2 Connecté</span>
         </div>
       </div>
 

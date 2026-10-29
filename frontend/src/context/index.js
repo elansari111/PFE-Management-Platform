@@ -1,3 +1,1 @@
-// React Contexts (AuthContext, ThemeContext, NotificationContext)
-export {}
-
+export { AuthProvider, useAuth } from './AuthContext'

@@ -36,11 +36,11 @@ export function MainLayout() {
                 PFE Management Platform &copy; 2026 — Plateforme Intelligente avec AI Encadrant
               </span>
               <div className="flex items-center space-x-3 text-[11px]">
-                <span className="font-mono text-[#1E3A8A] font-semibold">dev-simo</span>
+                <span className="font-mono text-[#1E3A8A] font-semibold">Sprint 2</span>
                 <span>•</span>
-                <span className="text-emerald-600 font-medium">Phase 2 Validée</span>
+                <span className="text-emerald-600 font-medium">Spring Boot &amp; React</span>
                 <span>•</span>
-                <span>Version 1.0.0-rc</span>
+                <span>v1.0.0</span>
               </div>
             </div>
           </footer>
@@ -51,4 +51,3 @@ export function MainLayout() {
 }
 
 export default MainLayout
-

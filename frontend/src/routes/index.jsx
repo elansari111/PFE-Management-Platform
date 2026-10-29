@@ -10,12 +10,25 @@ import { NotificationsPage } from '../pages/notifications'
 import { ProfilePage } from '../pages/profile'
 import { SettingsPage } from '../pages/settings'
 import { NotFoundPage } from '../pages/not-found'
+import { AuthPage } from '../pages/auth'
+import { ProtectedRoute } from './ProtectedRoute'
 
 export function AppRoutes() {
   return (
     <Routes>
-      {/* Layout Principal encapsulant l'ensemble des pages de l'application */}
-      <Route path="/" element={<MainLayout />}>
+      {/* Route publique : Authentification / Connexion */}
+      <Route path="/login" element={<AuthPage />} />
+      <Route path="/auth" element={<Navigate to="/login" replace />} />
+
+      {/* Routes protégées : nécessitent une session active */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <MainLayout />
+          </ProtectedRoute>
+        }
+      >
         {/* Redirection automatique de la racine vers le tableau de bord */}
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />

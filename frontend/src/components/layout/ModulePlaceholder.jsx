@@ -67,7 +67,7 @@ export function ModulePlaceholder({
           )}
 
           <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
-            <span className="text-xs text-slate-400">PFE Management Platform &bull; dev-simo</span>
+            <span className="text-xs text-slate-400">PFE Management Platform &bull; Sprint 2</span>
             <Link to="/dashboard">
               <Button variant="primary" size="sm">
                 Retour au Tableau de bord

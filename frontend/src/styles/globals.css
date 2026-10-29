@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #1E3A8A;
+  --color-brand-primary-dark: #172554;
+  --color-brand-primary-light: #2563EB;
+  --color-brand-accent: #0DAD98;
+  --color-brand-accent-hover: #0b8f7d;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-bg: #F8FAFC;
+  --color-brand-border: #E2E8F0;
+  --color-brand-text: #0F172A;
+  --font-inter: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+

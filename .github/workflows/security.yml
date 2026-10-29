@@ -5,13 +5,20 @@ on:
     branches:
       - main
       - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
     branches:
       - main
       - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   schedule:
     # Scan hebdomadaire tous les lundis à 04:00 UTC
     - cron: '0 4 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +27,7 @@ jobs:
   secret-scan:
     name: Secret & Credential Scanning
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,13 +38,13 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           extra_args: --only-verified
-        continue-on-error: true
 
       - name: Verify No Sensitive Files Committed
         run: |
-          echo "Checking that no .env or private key files are present in git history..."
-          if git ls-files | grep -E '(\.env$|\.key$|\.pem$)'; then
-            echo "CRITICAL: Sensitive files found committed in git!"
+          echo "Vérification de l'absence de fichiers sensibles (.env, clés privées, certificats)..."
+          SENSITIVE_FILES=$(git ls-files | grep -E '(\.env$|\.key$|\.pem$|\.cert$|id_rsa$)' || true)
+          if [ -n "$SENSITIVE_FILES" ]; then
+            echo "::error::Fichiers sensibles détectés dans Git : $SENSITIVE_FILES"
             exit 1
           fi
-          echo "No sensitive files detected."
+          echo "Aucun fichier sensible détecté dans l'arborescence suivie par Git."

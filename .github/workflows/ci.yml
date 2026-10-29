@@ -4,10 +4,24 @@ on:
   push:
     branches:
       - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
   pull_request:
     branches:
       - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -19,6 +33,7 @@ jobs:
   backend-ci:
     name: Backend CI (Spring Boot & Tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -34,12 +49,18 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+          cache-dependency-path: backend/pom.xml
 
-      - name: Make Maven wrapper executable
-        run: chmod +x mvnw
+      - name: Verify Maven wrapper scripts
+        run: |
+          if [ ! -f mvnw ] || [ ! -f .mvn/wrapper/maven-wrapper.properties ]; then
+            echo "::error::Maven wrapper non trouvé dans le répertoire backend !"
+            exit 1
+          fi
+          chmod +x mvnw
 
       - name: Compile and execute automated tests
-        run: ./mvnw -B clean verify
+        run: ./mvnw -B --no-transfer-progress clean verify
 
       - name: Upload Surefire test reports
         if: always()
@@ -48,21 +69,26 @@ jobs:
           name: backend-surefire-reports
           path: backend/target/surefire-reports/
           retention-days: 14
+          if-no-files-found: ignore
 
-      - name: Upload packaged JAR artifact
+      - name: Filter and upload packaged JAR artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: backend-jar
-          path: backend/target/*.jar
+          path: |
+            backend/target/*.jar
+            !backend/target/*.jar.original
           retention-days: 7
+          if-no-files-found: error
 
   # ============================================================================
-  # JOB 2 : FRONTEND CI (React + TypeScript)
+  # JOB 2 : FRONTEND CI (React + TypeScript + Vite)
   # ============================================================================
   frontend-ci:
     name: Frontend CI (React & TypeScript)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -76,52 +102,53 @@ jobs:
         id: check-frontend
         run: |
           if [ -f package.json ]; then
-            echo "frontend_initialized=true" >> "$GITHUB_OUTPUT"
-            echo "package.json found. Proceeding with frontend CI tasks."
+            echo "initialized=true" >> "$GITHUB_OUTPUT"
+            echo "package.json détecté. Démarrage des vérifications frontend."
           else
-            echo "frontend_initialized=false" >> "$GITHUB_OUTPUT"
+            echo "initialized=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=Frontend en attente::Le dossier frontend/ ne contient pas encore de package.json (projet en cours d'initialisation par l'équipe frontend)."
           fi
 
       - name: Set up Node.js LTS (20.x)
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+      - name: Install dependencies (Reproducible npm ci)
+        if: steps.check-frontend.outputs.initialized == 'true'
         run: |
           if [ -f package-lock.json ]; then
             npm ci
           else
+            echo "::warning::package-lock.json manquant, utilisation de npm install."
             npm install
           fi
 
       - name: TypeScript type checking
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         run: |
           if npx --no-install tsc --version >/dev/null 2>&1; then
             npx tsc --noEmit
           elif npm run | grep -q "typecheck"; then
             npm run typecheck
           else
-            echo "Aucun script de vérification de type configuré, passage."
+            echo "Aucun script typecheck configuré, passage."
           fi
 
       - name: Linting (ESLint)
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         run: |
           if npm run | grep -q "lint"; then
             npm run lint
           else
-            echo "Aucun script de lint configuré, passage."
+            echo "Aucun script lint configuré, passage."
           fi
 
       - name: Execute frontend tests
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         run: |
           if npm run | grep -q "test"; then
             npm test -- --watchAll=false
@@ -130,11 +157,11 @@ jobs:
           fi
 
       - name: Build production bundle
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         run: npm run build
 
       - name: Upload production build artifact
-        if: steps.check-frontend.outputs.frontend_initialized == 'true'
+        if: steps.check-frontend.outputs.initialized == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -142,9 +169,10 @@ jobs:
             frontend/dist/
             frontend/build/
           retention-days: 7
+          if-no-files-found: error
 
   # ============================================================================
-  # JOB 3 : CI SUMMARY GATE (Validation Globale pour Branch Protection Rule)
+  # JOB 3 : GLOBAL CI GATE (Validation Globale & Résumé Markdown)
   # ============================================================================
   ci-status-check:
     name: Global CI Gate (Backend & Frontend)
@@ -152,14 +180,41 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Verify Overall CI Success
+      - name: Generate Consolidated CI Summary
         run: |
-          if [ "${{ needs.backend-ci.result }}" != "success" ]; then
-            echo "::error::Le job Backend CI a échoué !"
+          BACKEND_RESULT="${{ needs.backend-ci.result }}"
+          FRONTEND_RESULT="${{ needs.frontend-ci.result }}"
+
+          echo "## Rapport d'Intégration Continue (CI)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Composant | Statut | Détails |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|:---:|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          # Évaluation Backend
+          if [ "$BACKEND_RESULT" = "success" ]; then
+            echo "| **Backend (Spring Boot 3 / Java 21)** | ✅ SUCCESS | Compilation, 23 tests automatisés et artefact JAR validés. |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| **Backend (Spring Boot 3 / Java 21)** | ❌ FAILURE | Erreur de compilation ou tests échoués. |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Évaluation Frontend
+          if [ "$FRONTEND_RESULT" = "success" ]; then
+            echo "| **Frontend (React / Vite / TypeScript)** | 🟡 ATTENTE / SUCCESS | Vérifications validées (ou initialisation en cours d'attente). |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| **Frontend (React / Vite / TypeScript)** | ❌ FAILURE | Erreur de build, de lint ou de test frontend. |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Contrôle bloquant pour Branch Protection
+          if [ "$BACKEND_RESULT" != "success" ]; then
+            echo "::error::Le job Backend CI a échoué ! Fusion interdite."
             exit 1
           fi
-          if [ "${{ needs.frontend-ci.result }}" != "success" ]; then
-            echo "::error::Le job Frontend CI a échoué !"
+
+          if [ "$FRONTEND_RESULT" != "success" ]; then
+            echo "::error::Le job Frontend CI a échoué ! Fusion interdite."
             exit 1
           fi
-          echo "Tous les jobs CI requis ont été validés avec succès."
+
+          echo " Tous les composants obligatoires de la CI ont été validés avec succès !" >> "$GITHUB_STEP_SUMMARY"

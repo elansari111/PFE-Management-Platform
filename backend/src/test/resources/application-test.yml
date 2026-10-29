@@ -19,3 +19,9 @@ management:
     web:
       exposure:
         include: health,info
+
+
+app:
+  jwt:
+    secret: dGhpcy1pcy1hLXZlcnktc2VjdXJlLWJhc2U2NC1zZWNyZXQta2V5LXRvLXByb3RlY3Qtand0LXRva2Vucy0yNTZiaXRz
+    expiration-ms: 86400000

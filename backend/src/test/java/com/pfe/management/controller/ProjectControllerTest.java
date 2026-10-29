@@ -34,7 +34,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ProjectController.class)
-@Import({SecurityConfig.class, CustomAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
+@Import({SecurityConfig.class, CustomAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class, com.pfe.management.security.JwtAuthenticationFilter.class, com.pfe.management.security.PasswordEncoderConfig.class})
+@org.springframework.boot.test.mock.mockito.MockBean(com.pfe.management.security.JwtService.class)
+@org.springframework.boot.test.mock.mockito.MockBean(com.pfe.management.security.CustomUserDetailsService.class)
 class ProjectControllerTest {
 
     @Autowired

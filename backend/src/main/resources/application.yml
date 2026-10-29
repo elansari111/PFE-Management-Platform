@@ -62,5 +62,8 @@ springdoc:
 
 # App specific properties
 app:
+  jwt:
+    secret: ${JWT_SECRET:dGhpcy1pcy1hLXZlcnktc2VjdXJlLWJhc2U2NC1zZWNyZXQta2V5LXRvLXByb3RlY3Qtand0LXRva2Vucy0yNTZiaXRz}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}

@@ -68,6 +68,39 @@ npm run build
 
 ---
 
+
+---
+
+## 🔐 Sécurité & Authentification (JWT & RBAC)
+
+La plateforme intègre une sécurité complète basée sur des tokens JWT signés (HMAC SHA-256) :
+- **Inscription (POST /api/v1/auth/register)** : Inscription publique sécurisée, rôle STUDENT attribué obligatoirement par défaut pour prévenir toute escalade de privilèges.
+- **Connexion (POST /api/v1/auth/login)** : Authentification par email/mot de passe avec hashage BCrypt et génération d'un Bearer token JWT stateless.
+- **Profil connecté (GET /api/v1/auth/me)** : Récupération des informations de profil via le header Authorization: Bearer <token>.
+- **Contrôle d'accès par rôle (RBAC)** : Prise en charge des rôles ADMIN, SUPERVISOR, STUDENT.
+- **Zéro fuite d'identifiants** : Les mots de passe et hashs ne sont jamais exposés dans les réponses API.
+
+---
+
+## 📡 Documentation API (Swagger / OpenAPI 3)
+
+L'API REST est entièrement documentée et explorable de manière interactive :
+- **Swagger UI** : [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **Spécification OpenAPI v3 (JSON)** : [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+- **Actuator Health / Monitoring** : [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+
+Endpoints principaux disponibles :
+| Domaine | Méthode | URL | Description | Accès |
+|---|:---:|---|---|:---:|
+| **Auth** | POST | /api/v1/auth/register | Inscription d'un compte étudiant | Public |
+| **Auth** | POST | /api/v1/auth/login | Connexion et obtention du token JWT | Public |
+| **Auth** | GET | /api/v1/auth/me | Consultation de son profil utilisateur | Authentifié (JWT) |
+| **Projects** | GET | /api/v1/projects | Liste paginée avec filtres et tris | Public |
+| **Projects** | GET | /api/v1/projects/{id} | Détail d'un projet PFE | Public |
+| **Projects** | POST | /api/v1/projects | Création d'un nouveau projet PFE | Authentifié (JWT) |
+| **Projects** | PUT | /api/v1/projects/{id} | Mise à jour complète d'un projet | Authentifié (JWT) |
+| **Projects** | DELETE | /api/v1/projects/{id} | Suppression d'un projet | Authentifié (JWT) |
+
 ## 📁 Structure du Projet
 
 ```text

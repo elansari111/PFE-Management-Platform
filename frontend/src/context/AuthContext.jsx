@@ -1,5 +1,6 @@
 import { useContext, useState, useEffect } from 'react'
 import apiClient from '../services/apiClient'
+import { isMockEnabled } from '../mocks'
 import { AuthContext } from './auth-context'
 
 export function AuthProvider({ children }) {
@@ -20,29 +21,48 @@ export function AuthProvider({ children }) {
     }
   })
 
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      if (isMockEnabled()) return false
+      return typeof window !== 'undefined' && !!localStorage.getItem('pfe_token')
+    } catch {
+      return false
+    }
+  })
 
   useEffect(() => {
+    let isMounted = true
+
     async function loadCurrentUser() {
+      if (isMockEnabled()) {
+        if (isMounted) setIsLoading(false)
+        return
+      }
+
       const savedToken = typeof window !== 'undefined' ? localStorage.getItem('pfe_token') : null
       if (!savedToken) {
-        setIsLoading(false)
+        if (isMounted) setIsLoading(false)
         return
       }
 
       try {
         const response = await apiClient.get('/auth/me')
-        setUser(response.data)
-        localStorage.setItem('pfe_user', JSON.stringify(response.data))
+        if (isMounted) {
+          setUser(response.data)
+          localStorage.setItem('pfe_user', JSON.stringify(response.data))
+        }
       } catch (err) {
         console.warn('Session expirée ou token invalide:', err)
         logout()
       } finally {
-        setIsLoading(false)
+        if (isMounted) setIsLoading(false)
       }
     }
 
     loadCurrentUser()
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const login = async (email, password) => {

@@ -1,9 +1,30 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import App from '../app/App'
+import { setMockMode } from '../mocks'
 
 describe('App Smoke Test - Phase 3', () => {
+  beforeEach(() => {
+    setMockMode(true)
+    localStorage.setItem('pfe_token', 'mock-token-test')
+    localStorage.setItem(
+      'pfe_user',
+      JSON.stringify({
+        id: 1,
+        firstName: 'Mohamed',
+        lastName: 'El Amrani',
+        email: 'mohamed@student.universite.ma',
+        role: 'STUDENT',
+      })
+    )
+  })
+
+  afterEach(() => {
+    setMockMode(null)
+    localStorage.clear()
+  })
+
   it('rend l’application avec le Layout SaaS, le tableau de bord et les métriques', async () => {
     render(
       <BrowserRouter>

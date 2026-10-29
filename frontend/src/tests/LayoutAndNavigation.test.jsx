@@ -2,23 +2,46 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { AppRoutes } from '../routes'
+import { AuthProvider } from '../context'
+import { ToastProvider } from '../components/ui'
 import { setMockMode } from '../mocks'
 
 describe('Layout and Navigation System - Phase 3', () => {
   beforeEach(() => {
     setMockMode(true)
+    // Simuler un utilisateur connecté pour les tests de layout
+    localStorage.setItem('pfe_token', 'mock-token-test')
+    localStorage.setItem(
+      'pfe_user',
+      JSON.stringify({
+        id: 1,
+        firstName: 'Mohamed',
+        lastName: 'El Amrani',
+        email: 'mohamed@student.universite.ma',
+        role: 'STUDENT',
+      })
+    )
   })
 
   afterEach(() => {
     setMockMode(null)
+    localStorage.clear()
   })
 
-  it('rend le Layout principal et navigue vers le tableau de bord par défaut', async () => {
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <AppRoutes />
+  const renderWithProviders = (initialEntries = ['/']) => {
+    return render(
+      <MemoryRouter initialEntries={initialEntries}>
+        <ToastProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </ToastProvider>
       </MemoryRouter>
     )
+  }
+
+  it('rend le Layout principal et navigue vers le tableau de bord par défaut', async () => {
+    renderWithProviders(['/'])
 
     // Vérification de la marque (desktop & mobile drawer)
     const brandElements = screen.getAllByText('PFE Platform')
@@ -52,11 +75,7 @@ describe('Layout and Navigation System - Phase 3', () => {
   })
 
   it('affiche la page Projets complète avec la liste des sujets', async () => {
-    render(
-      <MemoryRouter initialEntries={['/projects']}>
-        <AppRoutes />
-      </MemoryRouter>
-    )
+    renderWithProviders(['/projects'])
 
     await waitFor(() => {
       expect(screen.getByText('Gestion des Projets PFE')).toBeInTheDocument()
@@ -65,11 +84,7 @@ describe('Layout and Navigation System - Phase 3', () => {
   })
 
   it('affiche la page 404 lors de la navigation vers une URL inconnue', () => {
-    render(
-      <MemoryRouter initialEntries={['/une-route-inexistante']}>
-        <AppRoutes />
-      </MemoryRouter>
-    )
+    renderWithProviders(['/une-route-inexistante'])
 
     expect(screen.getByText('Erreur 404')).toBeInTheDocument()
     expect(screen.getByText('Page Introuvable')).toBeInTheDocument()

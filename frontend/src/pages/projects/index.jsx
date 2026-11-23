@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   FolderGit2,
   Plus,
@@ -75,6 +75,15 @@ export function ProjectsPage() {
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [formApiErrors, setFormApiErrors] = useState(null)
 
+    // Évite les mises à jour d'état après le démontage du composant
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   // Chargement des projets
   const loadProjects = useCallback(
     async (pageToLoad = 0) => {
@@ -90,6 +99,8 @@ export function ProjectsPage() {
           search: searchTerm,
         })
 
+        if (!isMountedRef.current) return
+
         setProjects(result.content || [])
         setPagination({
           pageNumber: result.pageNumber ?? pageToLoad,
@@ -100,13 +111,16 @@ export function ProjectsPage() {
           last: result.last ?? true,
         })
       } catch (err) {
+        if (!isMountedRef.current) return
         console.error('Erreur chargement projets:', err)
         setError(
           err.message ||
             'Impossible de charger la liste des projets. Vérifiez la connexion au backend Spring Boot.'
         )
       } finally {
-        setIsLoading(false)
+        if (isMountedRef.current) {
+          setIsLoading(false)
+        }
       }
     },
     [statusFilter, pagination.pageSize, sortBy, sortDirection, searchTerm]

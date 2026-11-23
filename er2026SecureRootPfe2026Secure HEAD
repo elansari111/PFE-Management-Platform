@@ -1,0 +1,32 @@
+[33mcommit ebb8f6d356e3b36d6ffeb13f393497f3cdff4d2e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdev-safia[m[33m, [m[1;31morigin/dev-safia[m[33m)[m
+Author: Safia ILAL <ilalsafia@gmail.com>
+Date:   Mon Nov 23 22:35:28 2026 +0100
+
+    feat(security): RBAC par rôle, comptes de démo et conteneurisation Docker
+    
+    - SecurityConfig : POST/PUT réservés à ADMIN et SUPERVISOR, DELETE à ADMIN
+    
+    - 4 tests de permissions (403 pour STUDENT)
+    
+    - Migration V2 : comptes admin et supervisor
+    
+    - Dockerfiles backend/frontend et docker-compose (db, backend, frontend)
+    
+    - JWT_SECRET lu depuis les variables d'environnement
+    
+    - Correction de application.yml
+
+ .env.example                                       | 37 [32m++++[m[31m------[m
+ backend/.dockerignore                              |  7 [32m++[m
+ backend/.env.example                               |  4 [32m+[m[31m-[m
+ backend/Dockerfile                                 | 28 [32m++++++++[m
+ .../com/pfe/management/security/JwtService.java    |  2 [32m+[m[31m-[m
+ .../pfe/management/security/SecurityConfig.java    | 12 [32m++[m[31m--[m
+ backend/src/main/resources/application.yml         |  4 [32m+[m[31m-[m
+ .../db/migration/V2__seed_default_users.sql        | 11 [32m+++[m
+ .../controller/ProjectControllerTest.java          | 54 [32m+++++++++++++++[m
+ docker-compose.yml                                 | 80 [32m++++++++++++++++++++++[m
+ frontend/.dockerignore                             |  6 [32m++[m
+ frontend/Dockerfile                                | 23 [32m+++++++[m
+ frontend/nginx.conf                                | 27 [32m++++++++[m
+ 13 files changed, 263 insertions(+), 32 deletions(-)

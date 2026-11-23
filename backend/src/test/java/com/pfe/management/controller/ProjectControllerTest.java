@@ -179,4 +179,58 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.errors.title").exists());
     }
+        @Test
+    @WithMockUser(username = "student", roles = {"STUDENT"})
+    @DisplayName("POST /api/v1/projects avec rôle STUDENT retourne 403 Forbidden")
+    void createProjectAsStudentReturns403() throws Exception {
+        ProjectCreateRequest request = new ProjectCreateRequest(
+                "Projet Interdit", "Description", ProjectStatus.PROPOSED,
+                LocalDate.now(), LocalDate.now().plusMonths(6)
+        );
+
+        mockMvc.perform(post("/api/v1/projects")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @WithMockUser(username = "supervisor", roles = {"SUPERVISOR"})
+    @DisplayName("POST /api/v1/projects avec rôle SUPERVISOR retourne 201 Created")
+    void createProjectAsSupervisorReturns201() throws Exception {
+        ProjectCreateRequest request = new ProjectCreateRequest(
+                "Projet Encadrant", "Description", ProjectStatus.PROPOSED,
+                LocalDate.now(), LocalDate.now().plusMonths(6)
+        );
+        ProjectResponse response = new ProjectResponse(
+                20L, "Projet Encadrant", "Description", ProjectStatus.PROPOSED,
+                LocalDate.now(), LocalDate.now().plusMonths(6),
+                0, 0, 0, LocalDateTime.now(), LocalDateTime.now()
+        );
+        when(projectService.createProject(any(ProjectCreateRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/projects")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @WithMockUser(username = "supervisor", roles = {"SUPERVISOR"})
+    @DisplayName("DELETE /api/v1/projects/{id} avec rôle SUPERVISOR retourne 403 Forbidden")
+    void deleteProjectAsSupervisorReturns403() throws Exception {
+        mockMvc.perform(delete("/api/v1/projects/1").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "student", roles = {"STUDENT"})
+    @DisplayName("DELETE /api/v1/projects/{id} avec rôle STUDENT retourne 403 Forbidden")
+    void deleteProjectAsStudentReturns403() throws Exception {
+        mockMvc.perform(delete("/api/v1/projects/1").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
 }

@@ -92,10 +92,12 @@ public class SecurityConfig {
                         // Public read access to projects list
                         .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()
 
-                        // Mutation endpoints on projects require authentication
-                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/projects/**").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/projects/**").authenticated()
+                        // RBAC : création / modification réservées à ADMIN et SUPERVISOR
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/projects/**").hasAnyRole("ADMIN", "SUPERVISOR")
+
+                        // RBAC : suppression réservée à ADMIN
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/projects/**").hasRole("ADMIN")
 
                         // Any other request must be authenticated
                         .anyRequest().authenticated()

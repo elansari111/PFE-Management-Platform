@@ -81,6 +81,10 @@ describe('Layout and Navigation System - Phase 3', () => {
       expect(screen.getByText('Gestion des Projets PFE')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Nouveau Projet/i })).toBeInTheDocument()
     })
+
+    // Attendre la fin du chargement asynchrone avant de terminer le test
+    const items = await screen.findAllByText(/Plateforme PFE avec CI\/CD/i, {}, { timeout: 3000 })
+    expect(items.length).toBeGreaterThan(0)
   })
 
   it('affiche la page 404 lors de la navigation vers une URL inconnue', () => {

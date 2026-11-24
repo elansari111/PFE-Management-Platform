@@ -1,3 +1,2 @@
 // Features: Tasks management (Kanban, list)
-export {}
-
+export { taskService } from './taskService'

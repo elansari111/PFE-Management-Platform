@@ -233,4 +233,24 @@ class ProjectControllerTest {
         mockMvc.perform(delete("/api/v1/projects/1").with(csrf()))
                 .andExpect(status().isForbidden());
     }
+        @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
+    @DisplayName("GET sur une route inconnue retourne 404 et non 500")
+    void unknownRouteReturns404() throws Exception {
+        mockMvc.perform(get("/api/v1/projects/inexistant/route/inconnue"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
+    @DisplayName("POST avec un JSON mal formé retourne 400 et non 500")
+    void malformedJsonReturns400() throws Exception {
+        mockMvc.perform(post("/api/v1/projects")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ ceci n'est pas du json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
 }

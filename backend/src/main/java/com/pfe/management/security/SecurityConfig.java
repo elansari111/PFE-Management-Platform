@@ -89,7 +89,19 @@ public class SecurityConfig {
                         // Public Auth endpoints
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
 
-                        // Public read access to projects list
+                        // Project members endpoints (must precede generic /api/v1/projects/**)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/projects/*/members").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/projects/*/members").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/projects/*/members/**").hasAnyRole("ADMIN", "SUPERVISOR")
+
+                        // Tasks endpoints
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/tasks/*/status").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/tasks/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/tasks/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/tasks/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/tasks/**").authenticated()
+
+                        // Public read access to projects list and details
                         .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()
 
                         // RBAC : création / modification réservées à ADMIN et SUPERVISOR

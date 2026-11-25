@@ -1,3 +1,2 @@
 // Features: Deliverables management
-export {}
-
+export { deliverableService } from './deliverableService'

@@ -101,6 +101,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/tasks/**").hasAnyRole("ADMIN", "SUPERVISOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/tasks/**").authenticated()
 
+                        // Deliverables endpoints
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/deliverables/*/review").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers("/api/v1/deliverables/**").authenticated()
+
                         // Public read access to projects list and details
                         .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()
 
@@ -125,7 +129,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        configuration.setExposedHeaders(List.of("Authorization", "Link", "X-Total-Count"));
+        configuration.setExposedHeaders(List.of("Authorization", "Link", "X-Total-Count", "Content-Disposition"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

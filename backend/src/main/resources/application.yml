@@ -46,13 +46,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
       base-path: /actuator
   endpoint:
     health:
       show-details: when-authorized
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: pfe-backend
 
 # OpenAPI / Swagger
 springdoc:

@@ -1,0 +1,110 @@
+# ==============================================================================
+# PFE Management Platform - Docker Compose PRODUCTION
+# ------------------------------------------------------------------------------
+# Utilisé par le pipeline CD (.github/workflows/cd.yml), copié sur le serveur
+# dans /opt/pfe/docker-compose.prod.yml.
+#
+# Différences avec docker-compose.yml (local) :
+#   - "image:" pointe vers GHCR (aucun "build:" : les images sont déjà construites
+#     par la CI/CD) ;
+#   - MySQL n'expose AUCUN port vers l'extérieur (accès interne au réseau Docker) ;
+#   - toutes les variables sont lues depuis le fichier .env présent dans /opt/pfe
+#     (docker compose lit automatiquement ./.env) ;
+#   - le tag d'image est piloté par la variable IMAGE_TAG (injectée par le CD).
+# ==============================================================================
+name: pfe-management
+
+services:
+  # ----------------------------------------------------------------------------
+  # Base de données MySQL 8.4
+  # ----------------------------------------------------------------------------
+  db:
+    image: mysql:8.4
+    container_name: pfe-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - pfe-net
+    # Aucune section "ports" : le port 3306 n'est accessible que depuis le
+    # réseau Docker interne (pas d'exposition sur Internet).
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ----------------------------------------------------------------------------
+  # Backend Spring Boot (image GHCR)
+  # ----------------------------------------------------------------------------
+  backend:
+    image: ghcr.io/elansari111/pfe-backend:${IMAGE_TAG:-latest}
+    container_name: pfe-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DB_URL: jdbc:mysql://db:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Persistance des fichiers téléversés (survit aux redéploiements).
+      - uploads_data:/app/uploads
+    ports:
+      - "8080:8080"
+    networks:
+      - pfe-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ----------------------------------------------------------------------------
+  # Frontend React servi par nginx (image GHCR)
+  # ----------------------------------------------------------------------------
+  frontend:
+    image: ghcr.io/elansari111/pfe-frontend:${IMAGE_TAG:-latest}
+    container_name: pfe-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Port 3000 côté serveur -> 80 dans le conteneur nginx.
+      - "3000:80"
+    networks:
+      - pfe-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# ------------------------------------------------------------------------------
+# Volumes nommés (données persistantes)
+# ------------------------------------------------------------------------------
+volumes:
+  db_data:
+  uploads_data:
+
+# ------------------------------------------------------------------------------
+# Réseau interne
+# ------------------------------------------------------------------------------
+networks:
+  pfe-net:
+    driver: bridge

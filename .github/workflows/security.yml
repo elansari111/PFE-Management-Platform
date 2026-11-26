@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - 'dev-*'
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -48,3 +49,72 @@ jobs:
             exit 1
           fi
           echo "Aucun fichier sensible détecté dans l'arborescence suivie par Git."
+
+  trivy-fs:
+    name: Trivy - Scan du code et des dépendances
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy-fs-report.txt
+          # Mettre '1' pour faire échouer la CI en cas de faille HIGH/CRITICAL
+          exit-code: '0'
+
+      - name: Afficher le rapport
+        if: always()
+        run: cat trivy-fs-report.txt
+
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
+
+  trivy-images:
+    name: Trivy - Scan image ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build de l'image ${{ matrix.service }}
+        run: docker build --build-arg VITE_API_BASE_URL=http://localhost:8080/api/v1 -t pfe-${{ matrix.service }}:scan ./${{ matrix.service }}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: pfe-${{ matrix.service }}:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy-${{ matrix.service }}-report.txt
+          # Mettre '1' pour faire échouer la CI en cas de faille HIGH/CRITICAL
+          exit-code: '0'
+
+      - name: Afficher le rapport
+        if: always()
+        run: cat trivy-${{ matrix.service }}-report.txt
+
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-${{ matrix.service }}-report
+          path: trivy-${{ matrix.service }}-report.txt

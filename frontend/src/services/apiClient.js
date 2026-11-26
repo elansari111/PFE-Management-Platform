@@ -40,9 +40,34 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status || 500
+    const requestUrl = error.config?.url || ''
+
+    // Session expirée / non autorisée (401) hors tentative de connexion :
+    // on purge la session locale puis on redirige vers la page de connexion.
+    if (status === 401 && !requestUrl.includes('/auth/login')) {
+      try {
+        if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+          window.localStorage.removeItem('pfe_token')
+          window.localStorage.removeItem('pfe_user')
+        }
+        // Pas de navigation en environnement de test (Vitest / jsdom)
+        if (
+          typeof window !== 'undefined' &&
+          import.meta.env.MODE !== 'test' &&
+          window.location &&
+          window.location.pathname !== '/login'
+        ) {
+          window.location.assign('/login')
+        }
+      } catch {
+        // Ignorer si localStorage ou la navigation sont indisponibles
+      }
+    }
+
     const formattedError = {
       message: 'Une erreur inattendue est survenue.',
-      status: error.response?.status || 500,
+      status,
       timestamp: error.response?.data?.timestamp || new Date().toISOString(),
       validationErrors: error.response?.data?.errors || error.response?.data?.validationErrors || null,
       raw: error,

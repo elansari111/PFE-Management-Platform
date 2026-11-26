@@ -5,6 +5,7 @@ import {
   CheckSquare,
   FileText,
   Users,
+  UserCog,
   Bot,
   Bell,
   Settings,
@@ -14,6 +15,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import { useAuth } from '../../context/useAuth'
+import { ROLES } from '../../utils/constants'
 
 export function Sidebar({
   isCollapsed = false,
@@ -21,6 +24,9 @@ export function Sidebar({
   isMobileOpen = false,
   onCloseMobile,
 }) {
+  const auth = useAuth()
+  const isAdmin = auth?.user?.role === ROLES.ADMIN
+
   const navigationItems = [
     {
       to: '/dashboard',
@@ -43,6 +49,16 @@ export function Sidebar({
       label: 'Livrables',
       icon: FileText,
     },
+    ...(isAdmin
+      ? [
+          {
+            to: '/users',
+            label: 'Utilisateurs',
+            icon: UserCog,
+            badge: 'ADMIN',
+          },
+        ]
+      : []),
     {
       to: '/supervision',
       label: 'Encadrement',

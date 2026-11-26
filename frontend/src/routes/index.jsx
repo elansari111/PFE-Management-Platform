@@ -4,6 +4,7 @@ import { DashboardPage } from '../pages/dashboard'
 import { ProjectsPage } from '../pages/projects'
 import { TasksPage } from '../pages/tasks'
 import { DeliverablesPage } from '../pages/deliverables'
+import { UsersPage } from '../pages/users'
 import { SupervisionPage } from '../pages/supervision'
 import { AIAssistantPage } from '../pages/ai-assistant'
 import { NotificationsPage } from '../pages/notifications'
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="deliverables" element={<DeliverablesPage />} />
+        <Route path="users" element={<UsersPage />} />
         <Route path="supervision" element={<SupervisionPage />} />
         <Route path="ai-assistant" element={<AIAssistantPage />} />
         <Route path="notifications" element={<NotificationsPage />} />

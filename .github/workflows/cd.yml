@@ -1,0 +1,269 @@
+# ==============================================================================
+# CD - Déploiement Continu (GitHub Actions)
+# ------------------------------------------------------------------------------
+# Déclenchement :
+#   - workflow_run : uniquement quand la CI « CI - Pipeline Globale (Backend &
+#     Frontend) » se termine AVEC SUCCÈS sur la branche `main` ;
+#   - workflow_dispatch : déclenchement manuel (test / redéploiement).
+#
+# Chaîne : CI (main) OK -> build & push des images sur GHCR -> déploiement SSH
+#          sur la VM -> vérification de santé -> rollback automatique si KO.
+# ==============================================================================
+name: CD - Déploiement Continu (Production)
+
+on:
+  # Déclenchement automatique après la fin de la CI sur `main`.
+  # NB : GitHub n'exécute ce workflow que si le fichier cd.yml existe sur la
+  #      branche par défaut (main). Il ne se déclenche jamais sur une PR.
+  workflow_run:
+    workflows: ["CI - Pipeline Globale (Backend & Frontend)"]
+    types: [completed]
+    branches: [main]
+  # Déclenchement manuel (utile pour tester sans attendre un push).
+  workflow_dispatch:
+
+# Un seul déploiement à la fois. On n'annule JAMAIS un déploiement en cours
+# pour éviter de laisser la stack dans un état intermédiaire.
+concurrency:
+  group: ${{ github.workflow }}-production
+  cancel-in-progress: false
+
+# Permissions minimales par défaut : lecture seule du dépôt.
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # JOB 1 : BUILD & PUSH DES IMAGES SUR GHCR
+  # ============================================================================
+  build-and-push:
+    name: Build & Push images (GHCR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Ne s'exécute que si la CI a réussi (ou en cas de déclenchement manuel).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    # Le job a besoin d'écrire des packages (GHCR) + de lire le dépôt.
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      # SHA court réutilisé par le job `deploy` pour taguer le déploiement.
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Calculer le tag (SHA court)
+        id: vars
+        run: |
+          # SHA court sur 7 caractères : identifie la version déployée.
+          echo "short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Vérifier la variable PROD_API_URL
+        run: |
+          # Le frontend est compilé avec VITE_API_BASE_URL = PROD_API_URL.
+          # Si la variable est vide, le bundle pointerait vers une URL vide : on bloque.
+          if [ -z "${{ vars.PROD_API_URL }}" ]; then
+            echo "::error::La variable de dépôt PROD_API_URL est vide."
+            echo "::error::Définissez-la dans Settings > Secrets and variables > Actions > Variables."
+            exit 1
+          fi
+
+      - name: Configurer Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Se connecter à GHCR (GITHUB_TOKEN)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push de l'image backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          # Deux tags : SHA court (traçabilité/rollback) et latest.
+          tags: |
+            ghcr.io/elansari111/pfe-backend:${{ steps.vars.outputs.short_sha }}
+            ghcr.io/elansari111/pfe-backend:latest
+          # Cache de build partagé via le cache GitHub Actions (type=gha).
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build & push de l'image frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          # URL de l'API telle que vue par le NAVIGATEUR (injectée au build Vite).
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.PROD_API_URL }}
+          tags: |
+            ghcr.io/elansari111/pfe-frontend:${{ steps.vars.outputs.short_sha }}
+            ghcr.io/elansari111/pfe-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  # ============================================================================
+  # JOB 2 : DÉPLOIEMENT SUR LA VM (SSH/SCP) + VÉRIFICATION DE SANTÉ + ROLLBACK
+  # ============================================================================
+  deploy:
+    name: Déploiement (SSH) - Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-and-push
+
+    # L'environnement `production` peut exiger une approbation manuelle
+    # (Required reviewers) avant l'exécution de ce job.
+    environment: production
+
+    permissions:
+      contents: read
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      # Port SSH par défaut 22 si le secret n'est pas défini.
+      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      # Chemin SSH utilisé par scp/ssh (clé dédiée au déploiement).
+      SSH_KEY_PATH: /home/runner/.ssh/id_deploy
+
+    steps:
+      - name: Checkout du dépôt (pour docker-compose.prod.yml)
+        uses: actions/checkout@v4
+
+      - name: Préparer la clé SSH et known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p /home/runner/.ssh
+          chmod 700 /home/runner/.ssh
+          # La clé privée est écrite via env (jamais affichée dans les logs).
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
+          # Empreinte du serveur pour éviter l'erreur "Host key verification failed".
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> /home/runner/.ssh/known_hosts 2>/dev/null
+          chmod 600 /home/runner/.ssh/known_hosts
+
+      - name: Copier docker-compose.prod.yml sur le serveur (SCP)
+        run: |
+          scp -P "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            docker-compose.prod.yml \
+            "$SSH_USER@$SSH_HOST:/opt/pfe/docker-compose.prod.yml"
+
+      - name: Se connecter à GHCR sur le serveur (lecture seule)
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          # Le token est transmis par stdin (jamais en argument de ligne de commande).
+          printf '%s' "$GHCR_READ_TOKEN" | ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" "docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin"
+
+      - name: Déployer la nouvelle version
+        id: deploy
+        run: |
+          # Le heredoc est quoté ('REMOTE') : les expressions GitHub Actions sont
+          # résolues avant l'envoi, les variables shell sont évaluées à distance.
+          ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/pfe
+
+          # 1) Mémoriser la version actuellement en service (pour le rollback).
+          CUR="$(cat /opt/pfe/.current_image_tag 2>/dev/null || echo latest)"
+          printf '%s\n' "$CUR" > /opt/pfe/.previous_image_tag
+          echo "Version en service avant deploiement : $CUR"
+
+          # 2) Pull des images puis redémarrage de la stack avec le nouveau tag.
+          export IMAGE_TAG="${{ needs.build-and-push.outputs.short_sha }}"
+          echo "Deploiement de la version : $IMAGE_TAG"
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
+
+          # 3) Nettoyage des images orphelines (les images en cours d'usage sont conservées).
+          docker image prune -f
+          REMOTE
+
+      - name: Vérifier la santé du backend (10 tentatives x 10 s)
+        id: health
+        run: |
+          echo "Vérification de /actuator/health sur le serveur..."
+          for i in $(seq 1 10); do
+            if ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+                 -o BatchMode=yes -o ConnectTimeout=15 \
+                 -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+                 "$SSH_USER@$SSH_HOST" "curl -fsS -m 5 http://localhost:8080/actuator/health" >/dev/null; then
+              echo "Backend sain (tentative $i/10)."
+              echo "healthy=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Tentative $i/10 échouée. Nouvel essai dans 10 s..."
+            sleep 10
+          done
+          echo "::error::Le backend n'est pas sain après 10 tentatives (/actuator/health)."
+          echo "healthy=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Confirmer la version courante
+        # Exécuté uniquement si la santé est OK : le tag devient la référence
+        # de "version précédente" pour le prochain déploiement.
+        if: steps.health.outcome == 'success'
+        run: |
+          ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" "printf '%s\n' '${{ needs.build-and-push.outputs.short_sha }}' > /opt/pfe/.current_image_tag"
+
+      - name: Rollback vers la version précédente
+        id: rollback
+        # Déclenché si le déploiement a réussi mais que la vérification de santé
+        # a échoué (la stack a bien été mise à jour, il faut donc revenir en arrière).
+        if: ${{ failure() && steps.deploy.outcome == 'success' }}
+        run: |
+          PREV_TAG="$(ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" "cat /opt/pfe/.previous_image_tag 2>/dev/null || echo latest")"
+          echo "::warning::Rollback vers la version précédente : $PREV_TAG"
+          ssh -p "$SSH_PORT" -i "$SSH_KEY_PATH" \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            -o UserKnownHostsFile=/home/runner/.ssh/known_hosts \
+            "$SSH_USER@$SSH_HOST" \
+            "cd /opt/pfe && export IMAGE_TAG='$PREV_TAG' && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d && docker image prune -f"
+
+      - name: Résumé du déploiement
+        if: always()
+        run: |
+          echo "## CD - Rapport de déploiement" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Élément | Valeur |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version déployée (SHA court) | \`${{ needs.build-and-push.outputs.short_sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Images GHCR | ghcr.io/elansari111/pfe-backend / pfe-frontend |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API (vue navigateur) | ${{ vars.PROD_API_URL }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend | http://<serveur>:3000 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build & Push | ${{ needs.build-and-push.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Déploiement | ${{ steps.deploy.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Vérification santé | ${{ steps.health.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Rollback | ${{ steps.rollback.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ steps.health.outcome }}" = "success" ]; then
+            echo "✅ **Résultat : déploiement réussi.**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **Résultat : déploiement échoué — rollback effectué.**" >> "$GITHUB_STEP_SUMMARY"
+          fi

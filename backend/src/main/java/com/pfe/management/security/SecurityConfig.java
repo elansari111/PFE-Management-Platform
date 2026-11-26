@@ -105,6 +105,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/deliverables/*/review").hasAnyRole("ADMIN", "SUPERVISOR")
                         .requestMatchers("/api/v1/deliverables/**").authenticated()
 
+                        // Users administration endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/**").hasAnyRole("ADMIN", "SUPERVISOR")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/users/**").hasRole("ADMIN")
+
                         // Public read access to projects list and details
                         .requestMatchers(HttpMethod.GET, "/api/v1/projects/**").permitAll()
 

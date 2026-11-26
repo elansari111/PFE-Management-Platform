@@ -142,5 +142,38 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/v1/auth/me"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Refus de connexion pour un compte désactivé (HTTP 401)")
+    void shouldRejectLoginForDeactivatedAccount() throws Exception {
+        User user = new User("Marc", "Desactive", "disabled@example.com",
+                passwordEncoder.encode("SecretPass123!"), Role.STUDENT);
+        user.setActive(false);
+        userRepository.save(user);
+
+        LoginRequest request = new LoginRequest("disabled@example.com", "SecretPass123!");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Un token déjà émis est refusé après désactivation du compte (HTTP 401)")
+    void shouldRejectExistingTokenAfterDeactivation() throws Exception {
+        User user = new User("Nadia", "Token", "todeactivate@example.com",
+                passwordEncoder.encode("SecretPass123!"), Role.STUDENT);
+        User saved = userRepository.save(user);
+
+        String token = jwtService.generateTokenForUser(saved.getEmail(), saved.getId(), saved.getRole().name());
+
+        saved.setActive(false);
+        userRepository.save(saved);
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
 }
 

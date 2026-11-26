@@ -15,15 +15,17 @@ public class UserPrincipal implements UserDetails {
     private final String password;
     private final String firstName;
     private final String lastName;
+    private final boolean enabled;
     private final Collection<? extends GrantedAuthority> authorities;
 
     public UserPrincipal(Long id, String email, String password, String firstName, String lastName,
-                         Collection<? extends GrantedAuthority> authorities) {
+                         boolean enabled, Collection<? extends GrantedAuthority> authorities) {
         this.id = id;
         this.email = email;
         this.password = password;
         this.firstName = firstName;
         this.lastName = lastName;
+        this.enabled = enabled;
         this.authorities = authorities;
     }
 
@@ -36,6 +38,7 @@ public class UserPrincipal implements UserDetails {
                 user.getPassword(),
                 user.getFirstName(),
                 user.getLastName(),
+                user.isActive(),
                 Collections.singletonList(authority)
         );
     }
@@ -84,7 +87,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return enabled;
     }
 }
 

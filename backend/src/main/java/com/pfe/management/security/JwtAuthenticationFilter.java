@@ -42,12 +42,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt) && jwtService.validateToken(jwt)) {
                 String email = jwtService.getEmailFromToken(jwt);
 
+                // Recharge systématiquement l'utilisateur depuis la base afin de refléter
+                // une éventuelle désactivation de compte (rôle, état actif) côté serveur.
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(email);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (userDetails.isEnabled()) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    log.warn("Tentative d'authentification avec un compte désactivé : {}", email);
+                }
             }
         } catch (Exception ex) {
             log.error("Impossible de définir l'authentification de l'utilisateur dans le contexte de sécurité", ex);

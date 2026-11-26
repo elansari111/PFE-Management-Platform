@@ -9,17 +9,19 @@ public class UserResponse {
     private String lastName;
     private String email;
     private String role;
+    private boolean active;
     private LocalDateTime createdAt;
 
     public UserResponse() {
     }
 
-    public UserResponse(Long id, String firstName, String lastName, String email, String role, LocalDateTime createdAt) {
+    public UserResponse(Long id, String firstName, String lastName, String email, String role, boolean active, LocalDateTime createdAt) {
         this.id = id;
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
         this.role = role;
+        this.active = active;
         this.createdAt = createdAt;
     }
 
@@ -61,6 +63,14 @@ public class UserResponse {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 
     public LocalDateTime getCreatedAt() {

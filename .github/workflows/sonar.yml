@@ -63,6 +63,7 @@ jobs:
       - name: Analyse du backend (échec si Quality Gate KO)
         working-directory: backend
         run: |
+          chmod +x mvnw
           ./mvnw -B -DskipTests compile \
             org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
             -Dsonar.projectKey=pfe-backend \

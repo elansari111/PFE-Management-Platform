@@ -16,6 +16,8 @@ RUN npm run build
 
 # ---------- Étape 2 : runtime ----------
 FROM nginx:1.27-alpine
+# Mise à jour des paquets système (correctifs de sécurité openssl, brotli)
+RUN apk upgrade --no-cache
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

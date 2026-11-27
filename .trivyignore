@@ -1,0 +1,10 @@
+# Risques acceptés, documentés dans le rapport de sécurité.
+
+# CVE-2026-47884 : Spring Framework, XsltView (spring-webmvc 6.1.14).
+# Le correctif open source n'existe qu'en Spring Framework 7.0.9 (migration majeure vers Spring Boot 4).
+# L'application est une API REST et n'utilise pas XsltView.
+CVE-2026-47884
+
+# CVE-2026-22732 : Spring Security 6.3.4.
+# Le correctif (6.5.9) nécessite une montée de version vers Spring Boot 3.5.x, prévue comme amélioration.
+CVE-2026-22732

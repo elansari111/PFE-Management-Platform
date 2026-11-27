@@ -14,7 +14,7 @@
     <name>pfe-management</name>
     <description>Plateforme de gestion des projets PFE - Backend Spring Boot</description>
 
-    <properties>
+        <properties>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -22,6 +22,8 @@
         <springdoc.version>2.6.0</springdoc.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <!-- Correctif de sécurité Tomcat (CVE-2025-24813 et CVE-2026-*) -->
+        <tomcat.version>10.1.59</tomcat.version>
     </properties>
 
     <dependencies>

@@ -79,9 +79,65 @@ services:
       - backend
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
+    networks:
+      - pfe-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: pfe-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - pfe-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: pfe-node-exporter
+    restart: unless-stopped
+    networks:
+      - pfe-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: pfe-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - pfe-net
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: pfe-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks:
+      - pfe-net
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: pfe-promtail
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - pfe-net
 
@@ -91,6 +147,7 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
+      - loki
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -108,6 +165,7 @@ volumes:
   uploads_data:
   prometheus_data:
   grafana_data:
+  loki_data:
 
 networks:
   pfe-net:

@@ -1,0 +1,95 @@
+name: DevSecOps - OWASP ZAP (DAST)
+
+on:
+  push:
+    branches:
+      - main
+      - 'dev-*'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Scan hebdomadaire tous les lundis à 05:00 UTC
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-scan:
+    name: OWASP ZAP - Scan dynamique
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Créer le fichier .env de test
+        run: |
+          cat > .env <<EOF
+          MYSQL_ROOT_PASSWORD=root_ci_password
+          DB_NAME=pfe_db
+          DB_USERNAME=pfe_user
+          DB_PASSWORD=pfe_ci_password
+          JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+          JWT_EXPIRATION_MS=86400000
+          CORS_ALLOWED_ORIGINS=http://localhost:3000
+          FRONTEND_API_URL=http://localhost:8080/api/v1
+          EOF
+
+      - name: Démarrer l'application (db, backend, frontend)
+        run: docker compose up -d --build db backend frontend
+
+      - name: Attendre que le backend soit prêt
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:8080/actuator/health > /dev/null; then
+              echo "Backend prêt"
+              exit 0
+            fi
+            echo "Attente du backend ($i/60)..."
+            sleep 5
+          done
+          echo "::error::Le backend n'a pas démarré"
+          docker compose logs backend --tail 80
+          exit 1
+
+      - name: Préparer le dossier des rapports
+        run: |
+          mkdir -p zap-reports
+          chmod 777 zap-reports
+
+      - name: ZAP Baseline - Frontend
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/zap-reports:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:3000 \
+            -r zap-frontend-report.html -I
+
+      - name: ZAP API Scan - Backend (OpenAPI)
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/zap-reports:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py -t http://localhost:8080/v3/api-docs -f openapi \
+            -r zap-api-report.html -I
+
+      - name: Publier les rapports ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: zap-reports/
+
+      - name: Logs du backend en cas d'échec
+        if: failure()
+        run: docker compose logs backend --tail 100
+
+      - name: Arrêter l'application
+        if: always()
+        run: docker compose down -v
